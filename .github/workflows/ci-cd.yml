@@ -8,7 +8,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -44,3 +44,18 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/cloud-file-storage:latest
+
+      - name: Deploy to AWS EC2
+        if: github.event_name == 'push'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USERNAME }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/cloud-file-storage:latest
+            sudo docker stop cloud-storage || true
+            sudo docker rm cloud-storage || true
+            sudo docker run -d --restart unless-stopped --name cloud-storage -p 5000:5000 ${{ secrets.DOCKERHUB_USERNAME }}/cloud-file-storage:latest
+            sleep 5
+            curl -f http://localhost:5000/health
